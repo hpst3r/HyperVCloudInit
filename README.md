@@ -2,7 +2,9 @@
 
 Created for the following post: https://www.wporter.org/getting-started-with-cloud-init-on-hyper-v
 
-This will demonstrate using PowerShell to generate a basic Cloud-init config and stand up an AlmaLinux VM (from the [AlmaLinux Generic Cloud image](https://wiki.almalinux.org/cloud/Generic-cloud.html) on a Server 2025 host. What follows is an excerpt from the post I mentioned above.
+This will demonstrate using PowerShell to generate a basic Cloud-init config and stand up an AlmaLinux VM from the [AlmaLinux Generic Cloud image](https://wiki.almalinux.org/cloud/Generic-cloud.html) on a Server 2025 host. What follows is an excerpt from the post I mentioned above.
+
+This has been (and is) tested on Windows Server 2025 and, to a lesser degree, Windows 11.
 
 # Dependencies
 1. qemu-img (only if you need to convert GenericCloud images to VHDXes - Azure images MIGHT work out of the box)
