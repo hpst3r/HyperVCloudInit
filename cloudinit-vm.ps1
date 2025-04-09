@@ -199,6 +199,15 @@ Terminating to avoid undesired VM state. Please remove file $($CloudInitMetadata
     }
 
 	# populate the meta-data file
+    
+    Write-Host @"
+
+## Generating meta-data file with: ##
+
+instance-id: $($VMName)
+local-hostname: $($VMName)
+
+"@
 
     $MetadataFile = @{
         ParentPath = $CloudInitMetadataPath
@@ -218,19 +227,33 @@ local-hostname: $VMName
     # hashed_passwd: $(ConvertFrom-SecureString -SecureString $HashedPassword -AsPlainText)
     # and set lock_passwd to False
 
+    Write-Host @"
+
+## Generating user-data file with: ##
+
+Name: $($Username)
+Password set: $([bool]($HashedPassword))
+Console PW auth: $([bool]($HashedPassword))
+SSH key: $($PublicKey)
+SSH PW auth: Disabled
+Sudo: ALL=(ALL) NOPASSWD:ALL
+
+"@
+
     $UserdataFile = @{
         ParentPath = $CloudInitMetadataPath
         Content = @"
 #cloud-config
 users:
 - name: $Username
+  $(if ($HashedPassword) { "passwd: $(ConvertFrom-SecureString -SecureString $HashedPassword -AsPlainText)`n  lock_passwd: False" } else { 'lock_passwd: True' } )
   groups: users,wheel
   sudo: ALL=(ALL) NOPASSWD:ALL
   shell: /bin/bash
-  lock_passwd: True
+
   ssh_authorized_keys:
    - $PublicKey
-
+  
 ssh_pwauth: False
 "@
         MetadataType = 'user'
@@ -304,7 +327,8 @@ Terminating.
 	}
 
 	Write-Host @"
-Attempting to create VM $($VMName) with specifications:
+
+## Attempting to create VM $($VMName) with specifications: ##
 
 Threads: $($vCPUs)
 Memory (Mb): $($Memory/([Math]::Pow(2,20)))
@@ -406,7 +430,7 @@ Enabling Secure Boot: $($EnableSecureBoot).
     # make sure first boot device is the cloned VHDX
 
     Write-Host `
-        "Setting VM $($VMName)'s first boot device to its hard drive (cloned VHDX.)"
+        "Setting VM $($VMName)'s first boot device to its hard drive (cloned VHDX)."
 
 	Set-VMFirmware `
         -VM $VM `

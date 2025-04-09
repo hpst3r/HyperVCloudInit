@@ -2,30 +2,50 @@
 
 Created for the following post: https://www.wporter.org/getting-started-with-cloud-init-on-hyper-v
 
-This will demonstrate using PowerShell to generate a basic Cloud-init config and stand up an AlmaLinux VM from the [AlmaLinux Generic Cloud image](https://wiki.almalinux.org/cloud/Generic-cloud.html) on a Server 2025 host. What follows is an excerpt from the post I mentioned above.
+This will demonstrate using PowerShell to generate a basic Cloud-init config and stand up an AlmaLinux VM from the [AlmaLinux Generic Cloud image](https://wiki.almalinux.org/cloud/Generic-cloud.html) on a Server 2025 or Windows 11 24H2 Hyper-V host. What follows is an excerpt from the linked post.
 
-This has been (and is) tested on Windows Server 2025 and, to a lesser degree, Windows 11.
+# TL:DR
+
+Get a VHDX cloud-init image
+Get oscdimg
+
+```txt
+Import-Module .\cloudinit-vm.ps1
+$bind = @{
+	VMName = 'bind.lab.wporter.org'
+	VMSwitchName = 'vlab0-natswitch'
+	OriginalVHDXPath = '.\al9gc.vhdx'
+	Username = 'liam'
+	PublicKey = 'ssh-ed25519 Zn'
+	Force = $true
+	HashedPassword = ('foobar' | ConvertTo-SecureString -AsPlainText -Force)
+}
+CloudInit-VM @bind
+```
 
 # Dependencies
+
 1. qemu-img (only if you need to convert GenericCloud images to VHDXes - Azure images MIGHT work out of the box)
 2. genisoimage, mkisofs, xorriso, or oscdimg
 
 You will also need a GenericCloud image of some kind to use this.
 
-## Installing Dependencies (Windows)
+## Installing Dependencies
 
-qemu-img alone can be downloaded from Cloudbase Solutions (company that supports cloudbase-init, which is basically cloud-init for Windows): https://cloudbase.it/qemu-img-windows/.
+### qemu-img
 
-PowerShell:
+qemu-img alone can be downloaded from Cloudbase Solutions (the company that supports the "cloud-init for Windows" tool cloudbase-init): https://cloudbase.it/qemu-img-windows/.
 
-```PowerShell
+Get it with PowerShell:
+
+```txt
 (irm https://cloudbase.it/downloads/qemu-img-win-x64-2_3_0.zip -outfile qemu-img.zip) |
-extract-archive .\qemu-img.zip
+expand-archive .\qemu-img.zip
 ```
 
-This will bring with it a few DLLs - don't throw them away:
+The archive will look something like this:
 
-```PowerShell
+```txt
 PS C:\Users\liam\projects\cloud-init-a9> gci qemu-img
 
     Directory: C:\Users\liam\projects\cloud-init-a9\qemu-img
@@ -41,7 +61,9 @@ Mode                 LastWriteTime         Length Name
 -a---           6/16/2015  9:37 PM        5615492 qemu-img.exe
 ```
 
-More complete QEMU binaries for Windows (include qemu-img) can be found at: https://qemu.weilnetz.de/w64/
+More complete QEMU binaries for Windows (include qemu-img) can be found at: https://qemu.weilnetz.de/w64/.
+
+### oscdimg
 
 oscdimg is a part of the Windows Assessment and Deployment Kit, which can be installed with the `winget` package manager, if you have that installed (24H2+, incl. Server 2025 have Winget working by default).
 
@@ -53,7 +75,7 @@ winget install Microsoft.WindowsADK
 
 Alternatively, you can download and run the ADK installer directly from Microsoft. If you do it this way, you can select only the "Deployment Tools" feature and save some disk space, or download and run the oscdimg installer alone.
 
-```PowerShell
+```txt
 (irm https://go.microsoft.com/fwlink/?linkid=2196127 -method GET -outfile adksetup.exe) |
 .\adksetup.exe
 ```
@@ -64,11 +86,11 @@ If you *download* the Deployment Tools, you won't be prompted to select which fe
 
 If you downloaded the ADK to your Downloads directory, the path to the installer(s) including that for oscdimg would be `~\Downloads\ADK\Installers`.
 
-I have an archive containing oscdimg.msi and its required .cab files. You could have an archive just like it. I'm not going to distribute it here, though, because Microsoft might get mad (probably not.)
+I have an archive containing oscdimg.msi and its required .cab files. This could be a useful way to quickly install just the component you want.
 
 For reference, those files are:
 
-```PowerShell
+```txt
 Mode                 LastWriteTime         Length Name
 ----                 -------------         ------ ----
 -a----         1/20/2025   8:15 PM          81130 52be7e8e9164388a9e6c24d01f6f1625.cab
@@ -82,43 +104,51 @@ Finally, [here's a link to the Oscdimg help page at (on?) MS Learn.](https://lea
 
 ## Installing Dependencies (Linux)
 
-I typically use WSL on my workstation, so I figured I'd include this as well. It's a little easier to get going this way, but you might not want/be able to go the WSL route on a locked-down work laptop or Windows build box.
+I typically use WSL on my workstation, so I figured I'd include this as well. It's a little easier to get qemu-img this way, but you might not want/be able to go the WSL route on a locked-down work laptop or Windows build box.
 
-You can install both genisoimage and qemu-img on Debian 12 with:
+You can install both genisoimage and qemu-img on Debian 12 from the standard repositories:
+
 ```sh
 # apt install genisoimage qemu-img
 ```
-Both are in the default Debian 12 repositories.
 
-On Enterprise Linux & friends (I use Alma), you'll have to install EPEL first.
+On Enterprise Linux & friends (I like to use Alma), you'll have to install EPEL first.
+
 ```sh
 # dnf install epel-release
 # dnf install genisoimage qemu-img
 ```
+
 # Converting a GenericCloud image to a VHDX
 
-One command, once you've downloaded qemu-img somewhere.
+This is one command (`qemu-img convert -O vhdx`), once you've downloaded qemu-img somewhere.
 
 ```cmd
-C:\Users\liam\projects\a9-ci-ex> .\qemu-img\qemu-img.exe convert -O vhdx C:\Users\liam\Downloads\AlmaLinux-9-GenericCloud-9.2-20230513.x86_64.qcow2 .\AlmaLinux-9-GenericCloud-9.2-20230513.x86_64.vhdx
+.\qemu-img\qemu-img.exe convert -O vhdx GenericCloud.qcow2 .GenericCloud.vhdx
 ```
+
+# Usage
 
 Once you've got a VHDX, you can come up with some parameters:
 
 ```PowerShell
 $ManicPgSQLParams = @{
 	VMName = 'manictime-pgsql'
-	VSwitchName = 'ext-untagged'
+	VMSwitchName = 'ext-untagged'
 	OriginalVHDXPath = 'D:\VHDX\AlmaLinux-9-GenericCloud-122024.vhdx'
 	Username = 'liam'
-	PublicKey = 'ssh-ed25519 i-know-this-isn't-sensitive-but-you're-not-getting-it-free'
+	PublicKey = 'ssh-ed25519 ssh key here'
 	Force = $true
 }
 ```
 
-and run the script!
+Import the `cloudinit-vm.ps1` file (containing one function) as a module, then run the function, like so:
 
-Full list of parameters that may be set in its current state:
+```PowerShell
+CloudInit-VM @ManicPgSQLParams
+```
+
+Here's the full list of parameters that may be set in its current state:
 
 ```txt
 	param (
@@ -129,7 +159,7 @@ Full list of parameters that may be set in its current state:
 		[string]$CloudInitMetadataOutPath = 'C:\tmp\cloud-init.iso',
         [string]$Username = 'cloud-user',
         [string]$PublicKey,
-        #[securestring]$HashedPassword = 'aabbccddeeff',
+        [securestring]$HashedPassword = 'aabbccddeeff',
 		[int]$vCPUs = 8,
 		[long]$Memory = 8GB,
         [bool]$Force = $false
@@ -138,25 +168,35 @@ Full list of parameters that may be set in its current state:
 
 ### VMName
 Self explanatory, I hope
+
 ### VMSwitchName
 The Hyper-V vSwitch you would like to attach the VM to.
+
 ### OriginalVHDXPath
 The Cloud-init-ready image you would like to copy to create your new VM.
+
 ### CloudInitMetadataPath
 Path to the directory that will be used for metadata.
+
 ### CloudInitMetadataOutPath
 Path to the ISO image that will be created from said metadata.
+
 ### Username
 The user that will be created in your VM with Cloud-init.
+
 ### PublicKey
 The created user's SSH public key
+
 ### HashedPassword
 If you'd like to use a password, you could uncomment this and the other relevant lines in the script.
 To create a hashed password, use the mkpasswd utility, which can be acquired on any good platform (not Windows) in the whois package (Debian 12) or mkpasswd package (AlmaLinux 9- appstream).
+
 ### vCPUs
 The number of threads to assign to the VM
+
 ### Memory
 The amount of memory, in bytes, to assign to the VM
+
 ### Force
 Optional flag to overwrite existing files instead of failing
 
